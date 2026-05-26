@@ -14,7 +14,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Map<String, dynamic> _stats = {};
   Map<String, double> _muscleVolume = {};
   List<Map<String, dynamic>> _exerciseProgress = [];
-  String _selectedMetric = 'Max'; // Vol or Max
+  List<FlSpot> _bodyweightSpots = [];
+  List<String> _bodyweightDates = [];
+  String _selectedMetric = 'Max';
   int _selectedMonths = 3;
   bool _loading = true;
 
@@ -26,7 +28,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Future<void> _load() async {
     try {
-      final treningi = await _supabase.from('treningi').select('id, started_at, ended_at').eq('is_draft', false);
+      final treningi = await _supabase.from('treningi').select('id, started_at, ended_at, bodyweight').eq('is_draft', false);
       final serie = await _supabase.from('serie').select('ciezar, powt, cwiczenie_id, completed_at, cwiczenia(nazwa, grupa_miesniowa)');
 
       int totalWorkouts = treningi.length;
@@ -51,6 +53,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         exerciseIds.add(s['cwiczenie_id']);
         final muscle = s['cwiczenia']?['grupa_miesniowa'] ?? 'Other';
         muscleVol[muscle] = (muscleVol[muscle] ?? 0) + w * r;
+      }
+
+      // Body weight tracking
+      final bwEntries = treningi
+          .where((t) => t['bodyweight'] != null)
+          .toList()
+        ..sort((a, b) => (a['started_at'] as String).compareTo(b['started_at'] as String));
+
+      final bwSpots = <FlSpot>[];
+      final bwDates = <String>[];
+      for (int i = 0; i < bwEntries.length; i++) {
+        bwSpots.add(FlSpot(i.toDouble(), (bwEntries[i]['bodyweight'] as num).toDouble()));
+        final dt = DateTime.parse(bwEntries[i]['started_at']).toLocal();
+        bwDates.add('${dt.day}/${dt.month}');
       }
 
       // Top exercises for progress chart
@@ -98,6 +114,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         };
         _muscleVolume = muscleVol;
         _exerciseProgress = exerciseProgress;
+        _bodyweightSpots = bwSpots;
+        _bodyweightDates = bwDates;
         _loading = false;
       });
     } catch (e) {
@@ -120,12 +138,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header
                       const Padding(
                         padding: EdgeInsets.only(bottom: 16),
                         child: Center(child: Text('Analytics', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
                       ),
-                      // Stats grid
                       GridView.count(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -143,12 +159,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      // Muscles section
+                      // Body weight section
+                      if (_bodyweightSpots.isNotEmpty) ...[
+                        const Text('Body Weight', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        _BodyWeightChart(spots: _bodyweightSpots, dates: _bodyweightDates),
+                        const SizedBox(height: 24),
+                      ],
                       const Text('Muscles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
                       _MuscleChart(muscleVolume: _muscleVolume),
                       const SizedBox(height: 24),
-                      // Charts section
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -175,9 +196,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // Time filter
                       Row(
-                        children: [1, 3].map((m) => GestureDetector(
+                        children: [1, 3, 6].map((m) => GestureDetector(
                           onTap: () { setState(() { _selectedMonths = m; _load(); }); },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -232,6 +252,80 @@ class _StatTile extends StatelessWidget {
           Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
           const SizedBox(height: 2),
           Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 9, letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BodyWeightChart extends StatelessWidget {
+  final List<FlSpot> spots;
+  final List<String> dates;
+  const _BodyWeightChart({required this.spots, required this.dates});
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = spots.last.y;
+    final first = spots.first.y;
+    final diff = latest - first;
+    final diffStr = diff >= 0 ? '+${diff.toStringAsFixed(1)}' : diff.toStringAsFixed(1);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Text('${latest.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (diff >= 0 ? AppTheme.green : AppTheme.accent).withAlpha(30),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text('$diffStr kg', style: TextStyle(
+                color: diff >= 0 ? AppTheme.green : AppTheme.accent,
+                fontSize: 12, fontWeight: FontWeight.w600,
+              )),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 100,
+            child: spots.length < 2
+                ? const Center(child: Text('Need more data', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)))
+                : LineChart(LineChartData(
+                    gridData: const FlGridData(show: false),
+                    borderData: FlBorderData(show: false),
+                    titlesData: const FlTitlesData(show: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: AppTheme.blue,
+                        barWidth: 2.5,
+                        dotData: FlDotData(
+                          getDotPainter: (_, _, _, i) => FlDotCirclePainter(
+                            radius: i == spots.length - 1 ? 4 : 2,
+                            color: AppTheme.blue,
+                            strokeWidth: 1.5,
+                            strokeColor: AppTheme.surface,
+                          ),
+                        ),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          gradient: LinearGradient(
+                            colors: [AppTheme.blue.withAlpha(60), AppTheme.blue.withAlpha(0)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )),
+          ),
         ],
       ),
     );
@@ -323,7 +417,7 @@ class _ExerciseChart extends StatelessWidget {
                         belowBarData: BarAreaData(
                           show: true,
                           gradient: LinearGradient(
-                            colors: [AppTheme.accent.withOpacity(0.3), AppTheme.accent.withOpacity(0.0)],
+                            colors: [AppTheme.accent.withAlpha(60), AppTheme.accent.withAlpha(0)],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),

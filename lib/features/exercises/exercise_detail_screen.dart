@@ -24,6 +24,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
   String? _maxWeightDate;
   List<Map<String, dynamic>> _history = [];
   List<FlSpot> _progressSpots = [];
+  String? _muscleGroup;
   bool _loading = true;
 
   @override
@@ -38,6 +39,16 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
 
   Future<void> _load() async {
     try {
+      // Load exercise metadata
+      try {
+        final ex = await _supabase
+            .from('cwiczenia')
+            .select('grupa_miesniowa')
+            .eq('id', widget.exerciseId)
+            .single();
+        _muscleGroup = ex['grupa_miesniowa'] as String?;
+      } catch (_) {}
+
       final series = await _supabase
           .from('serie')
           .select('ciezar, powt, strona, completed_at, trening_id')
@@ -46,7 +57,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
 
       if (series.isEmpty) { setState(() => _loading = false); return; }
 
-      // Best 1RM (Epley)
       double best1rm = 0;
       double maxW = 0;
       double maxVol = 0;
@@ -67,7 +77,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
         maxVol += w * r;
       }
 
-      // Progress spots (1RM per session)
       final sortedDates = byDate.keys.toList()..sort();
       final spots = <FlSpot>[];
       for (int i = 0; i < sortedDates.length; i++) {
@@ -82,7 +91,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
         spots.add(FlSpot(i.toDouble(), double.parse(dayBest.toStringAsFixed(1))));
       }
 
-      // History (by workout session)
       final historyByWorkout = <String, List<Map<String, dynamic>>>{};
       for (final s in series) {
         historyByWorkout.putIfAbsent(s['trening_id'] as String, () => []).add(s);
@@ -136,7 +144,15 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> with Single
           ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
           : TabBarView(
               controller: _tabs,
-              children: [_StatsTab(this), _HistoryTab(this), _GuideTab()],
+              children: [
+                _StatsTab(this),
+                _HistoryTab(this),
+                _GuideTab(
+                  name: widget.exerciseName,
+                  type: widget.exerciseType,
+                  muscleGroup: _muscleGroup,
+                ),
+              ],
             ),
     );
   }
@@ -156,7 +172,6 @@ class _StatsTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // 1RM card
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -185,15 +200,16 @@ class _StatsTab extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('MAX VOLUME', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, letterSpacing: 0.5, fontWeight: FontWeight.w600)),
+              const Text('TOTAL VOLUME', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, letterSpacing: 0.5, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Text('${((s._maxVolume ?? 0) / 1000).toStringAsFixed(1)}K kg', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ]),
           )),
         ]),
         const SizedBox(height: 20),
-        // Progress chart
         if (s._progressSpots.length >= 2) ...[
+          const Text('Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
           SizedBox(
             height: 140,
             child: LineChart(LineChartData(
@@ -218,7 +234,7 @@ class _StatsTab extends StatelessWidget {
                   color: AppTheme.accent, strokeWidth: 1.5, strokeColor: AppTheme.background,
                 )),
                 belowBarData: BarAreaData(show: true, gradient: LinearGradient(
-                  colors: [AppTheme.accent.withOpacity(0.3), AppTheme.accent.withOpacity(0)],
+                  colors: [AppTheme.accent.withAlpha(60), AppTheme.accent.withAlpha(0)],
                   begin: Alignment.topCenter, end: Alignment.bottomCenter,
                 )),
               )],
@@ -226,18 +242,17 @@ class _StatsTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
         ],
-        // Rep Maxes table
         const Text('Rep Maxes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
           child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(children: [
-                const Expanded(child: Text('REPS', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
-                const Expanded(child: Text('ESTIMATED', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
-                const Expanded(child: Text('ACHIEVED', textAlign: TextAlign.right, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
+                Expanded(child: Text('REPS', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
+                Expanded(child: Text('ESTIMATED', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
+                Expanded(child: Text('ACHIEVED', textAlign: TextAlign.right, style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
               ]),
             ),
             const Divider(height: 1),
@@ -259,7 +274,7 @@ class _StatsTab extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 8),
-        const Text('Estimated maxes are calculated from your best set in the last 30 days.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+        const Text('Estimated maxes are calculated from your best set using the Epley formula.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
       ]),
     );
   }
@@ -311,11 +326,142 @@ class _HistoryTab extends StatelessWidget {
 }
 
 class _GuideTab extends StatelessWidget {
+  final String name;
+  final String type;
+  final String? muscleGroup;
+
+  const _GuideTab({required this.name, required this.type, this.muscleGroup});
+
+  static const _guides = <String, Map<String, String>>{
+    'Chest': {
+      'primary': 'Pectoralis Major',
+      'secondary': 'Anterior Deltoid, Triceps',
+      'tips': '• Keep shoulder blades retracted and depressed\n• Control the eccentric (lowering) phase\n• Full range of motion for maximum muscle activation\n• Maintain consistent bar path',
+    },
+    'Back': {
+      'primary': 'Latissimus Dorsi, Rhomboids',
+      'secondary': 'Biceps, Rear Deltoid, Trapezius',
+      'tips': '• Initiate the pull with your elbows, not hands\n• Squeeze shoulder blades together at contraction\n• Avoid using momentum or swinging\n• Maintain a neutral spine throughout',
+    },
+    'Shoulders': {
+      'primary': 'Deltoids (Anterior, Lateral, Posterior)',
+      'secondary': 'Trapezius, Rotator Cuff',
+      'tips': '• Avoid shrugging — keep shoulders down\n• Control the weight through full ROM\n• Warm up rotator cuff before heavy pressing\n• Use lighter weights for isolation movements',
+    },
+    'Arms': {
+      'primary': 'Biceps Brachii / Triceps Brachii',
+      'secondary': 'Brachialis, Forearms',
+      'tips': '• Keep elbows stationary during curls\n• Full extension on tricep movements\n• Avoid swinging or using momentum\n• Mind-muscle connection is key for arms',
+    },
+    'Legs': {
+      'primary': 'Quadriceps, Hamstrings, Glutes',
+      'secondary': 'Calves, Hip Flexors, Adductors',
+      'tips': '• Knees track over toes during squats\n• Push through the full foot, not just toes\n• Keep core braced and spine neutral\n• Full depth for optimal quad/glute activation',
+    },
+    'Core': {
+      'primary': 'Rectus Abdominis, Obliques',
+      'secondary': 'Transverse Abdominis, Erector Spinae',
+      'tips': '• Breathe out on contraction\n• Avoid pulling on your neck during crunches\n• Engage deep core before movement starts\n• Quality reps over quantity',
+    },
+    'Cardio': {
+      'primary': 'Cardiovascular System',
+      'secondary': 'Multiple muscle groups depending on activity',
+      'tips': '• Warm up for 5 minutes at low intensity\n• Monitor heart rate for target zone\n• Cool down and stretch after session\n• Stay hydrated throughout',
+    },
+  };
+
   @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(32),
-      child: Text('Exercise guide coming soon', style: TextStyle(color: AppTheme.textSecondary)),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final guide = _guides[muscleGroup];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.fitness_center, color: AppTheme.accent, size: 24),
+                const SizedBox(width: 10),
+                Expanded(child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              ]),
+              const SizedBox(height: 12),
+              _InfoRow(label: 'Type', value: type == 'unilateral' ? 'Unilateral (L/R)' : 'Bilateral'),
+              if (muscleGroup != null) _InfoRow(label: 'Muscle Group', value: muscleGroup!),
+            ]),
+          ),
+          if (guide != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('MUSCLES WORKED', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                const SizedBox(height: 10),
+                _InfoRow(label: 'Primary', value: guide['primary']!),
+                _InfoRow(label: 'Secondary', value: guide['secondary']!),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('FORM TIPS', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                const SizedBox(height: 10),
+                Text(guide['tips']!, style: const TextStyle(fontSize: 14, height: 1.6)),
+              ]),
+            ),
+          ] else ...[
+            const SizedBox(height: 32),
+            const Center(child: Text('Guide data for this muscle group is not available yet.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14), textAlign: TextAlign.center)),
+          ],
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
+            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('GENERAL TIPS', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              SizedBox(height: 10),
+              Text(
+                '• Always warm up before lifting heavy\n'
+                '• Progressive overload: increase weight/reps over time\n'
+                '• Rest 2-3 min between heavy compound sets\n'
+                '• Rest 60-90s between isolation sets\n'
+                '• Track your progress to stay motivated',
+                style: TextStyle(fontSize: 14, height: 1.6),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label, value;
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+        ],
+      ),
+    );
+  }
 }

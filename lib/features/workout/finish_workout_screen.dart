@@ -66,7 +66,8 @@ class _FinishWorkoutScreenState extends State<FinishWorkoutScreen> {
         }).toList());
       }
 
-      if (mounted) context.go('/');
+      if (!mounted) return;
+      context.go('/');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {

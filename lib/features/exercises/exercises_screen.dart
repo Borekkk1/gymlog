@@ -256,7 +256,7 @@ class _ExerciseTile extends StatelessWidget {
         children: [
           if (isUnilateral) Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(color: AppTheme.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(5)),
+            decoration: BoxDecoration(color: AppTheme.orange.withAlpha(38), borderRadius: BorderRadius.circular(5)),
             child: const Text('L/R', style: TextStyle(color: AppTheme.orange, fontSize: 11, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 4),

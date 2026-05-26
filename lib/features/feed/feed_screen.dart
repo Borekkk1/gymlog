@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 
@@ -302,7 +303,10 @@ class _MonthSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           // Workout cards for this month
-          ...workouts.map((w) => _WorkoutCard(workout: w)),
+          ...workouts.map((w) => _WorkoutCard(
+            workout: w,
+            onTap: () => GoRouter.of(context).push('/workout/detail/${w['id']}'),
+          )),
           const Divider(height: 1, indent: 16, endIndent: 16),
         ],
       ),
@@ -403,7 +407,8 @@ class _StatBox extends StatelessWidget {
 
 class _WorkoutCard extends StatelessWidget {
   final Map<String, dynamic> workout;
-  const _WorkoutCard({required this.workout});
+  final VoidCallback? onTap;
+  const _WorkoutCard({required this.workout, this.onTap});
 
   String _timeAgo(String iso) {
     final dt = DateTime.parse(iso).toLocal();
@@ -427,43 +432,47 @@ class _WorkoutCard extends StatelessWidget {
       dur = DateTime.parse(workout['ended_at']).difference(DateTime.parse(workout['started_at']));
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.surface2,
-              borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.surface2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.fitness_center, color: AppTheme.textSecondary, size: 22),
             ),
-            child: const Icon(Icons.fitness_center, color: AppTheme.textSecondary, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text('You · ${_timeAgo(workout['started_at'])}',
-                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(workout['nazwa'] ?? 'Workout',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 2),
-                Text(
-                  '$exerciseCount exercise${exerciseCount != 1 ? 's' : ''} · ${dur.inMinutes}m',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                ),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('You · ${_timeAgo(workout['started_at'])}',
+                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(workout['nazwa'] ?? 'Workout',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$exerciseCount exercise${exerciseCount != 1 ? 's' : ''} · ${dur.inMinutes}m',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const Icon(Icons.chevron_right, color: AppTheme.textSecondary, size: 20),
+          ],
+        ),
       ),
     );
   }
