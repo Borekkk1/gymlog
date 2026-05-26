@@ -1,14 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
+import '../../core/providers.dart';
 
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
+  Future<void> _exportData(BuildContext context) async {
+    final supabase = Supabase.instance.client;
+    try {
+      final treningi = await supabase.from('treningi').select().eq('is_draft', false).order('started_at', ascending: false);
+      final serie = await supabase.from('serie').select('*, cwiczenia(nazwa)');
+
+      final lines = <String>['date,workout,exercise,set,kg,reps,side,note'];
+      for (final t in treningi) {
+        final wSeries = serie.where((s) => s['trening_id'] == t['id']).toList();
+        for (final s in wSeries) {
+          lines.add([
+            t['started_at'],
+            t['nazwa'] ?? '',
+            s['cwiczenia']?['nazwa'] ?? '',
+            s['numer_serii'],
+            s['ciezar'],
+            s['powt'],
+            s['strona'] ?? '',
+            s['note'] ?? '',
+          ].join(','));
+        }
+      }
+
+      final csv = lines.join('\n');
+      await Clipboard.setData(ClipboardData(text: csv));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${treningi.length} workouts copied to clipboard as CSV'),
+          backgroundColor: AppTheme.surface2,
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: AppTheme.accent));
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = Supabase.instance.client.auth.currentUser;
     final email = user?.email ?? 'Not logged in';
+    final unit = ref.watch(unitProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -20,7 +63,6 @@ class MoreScreen extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(child: Text('More', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
               ),
-              // Profile section
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Container(
@@ -29,7 +71,7 @@ class MoreScreen extends StatelessWidget {
                   child: Row(children: [
                     Container(
                       width: 48, height: 48,
-                      decoration: BoxDecoration(color: AppTheme.surface2, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: AppTheme.surface2, shape: BoxShape.circle),
                       child: const Icon(Icons.person, color: AppTheme.textSecondary),
                     ),
                     const SizedBox(width: 14),
@@ -44,19 +86,21 @@ class MoreScreen extends StatelessWidget {
                 ),
               ),
               _Section(title: 'DATA', items: [
-                _Item(icon: Icons.upload_outlined, label: 'Import from Gravitus', onTap: () {}),
-                _Item(icon: Icons.download_outlined, label: 'Export Data', onTap: () {}),
+                _Item(icon: Icons.download_outlined, label: 'Export Data (CSV)', onTap: () => _exportData(context)),
               ]),
               _Section(title: 'SETTINGS', items: [
-                _Item(icon: Icons.fitness_center_outlined, label: 'Units (kg / lbs)', trailing: 'kg', onTap: () {}),
-                _Item(icon: Icons.timer_outlined, label: 'Default Rest Time', trailing: '1:30', onTap: () {}),
-                _Item(icon: Icons.notifications_outlined, label: 'Notifications', onTap: () {}),
-                _Item(icon: Icons.health_and_safety_outlined, label: 'Apple Health', onTap: () {}),
+                _Item(
+                  icon: Icons.fitness_center_outlined,
+                  label: 'Units',
+                  trailing: unit,
+                  onTap: () => ref.read(unitProvider.notifier).toggle(),
+                ),
               ]),
               _Section(title: 'ACCOUNT', items: [
                 _Item(icon: Icons.logout_rounded, label: 'Sign Out', isDestructive: true,
                   onTap: () async {
                     await Supabase.instance.client.auth.signOut();
+                    if (context.mounted) context.go('/auth');
                   }),
               ]),
               const SizedBox(height: 32),

@@ -170,6 +170,29 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
   void _startRest() => setState(() { _restCountdown = _restSeconds; _restActive = true; });
 
+  void _checkPR(ActiveExercise exercise, ActiveSet set) {
+    if (set.prevWeight == null) return;
+    if (set.weight > set.prevWeight!) {
+      _showPRBanner(exercise.name, set.weight);
+    }
+  }
+
+  void _showPRBanner(String exerciseName, double weight) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Text('🏆 ', style: TextStyle(fontSize: 20)),
+        Expanded(child: Text(
+          'New PR! $exerciseName — ${weight}kg',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        )),
+      ]),
+      backgroundColor: AppTheme.accent,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
   Future<void> _finish() async {
     final allDone = _exercises.every((ex) => ex.sets.every((s) => s.done));
     if (!allDone) {
@@ -198,6 +221,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       }
     }
 
+    if (!mounted) return;
     context.push('/workout/finish', extra: {
       'name': _workoutName,
       'duration': duration.inMinutes,
@@ -292,7 +316,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                       return _ExerciseCard(
                         exercise: _exercises[i],
                         onUpdate: () => setState(() {}),
-                        onSetDone: () { _startRest(); setState(() {}); },
+                        onSetDone: (ActiveSet doneSet) {
+                          _startRest();
+                          _checkPR(_exercises[i], doneSet);
+                          setState(() {});
+                        },
                         onRemove: () => setState(() => _exercises.removeAt(i)),
                       );
                     },
@@ -435,7 +463,7 @@ class _AddButton extends StatelessWidget {
 class _ExerciseCard extends StatelessWidget {
   final ActiveExercise exercise;
   final VoidCallback onUpdate;
-  final VoidCallback onSetDone;
+  final void Function(ActiveSet) onSetDone;
   final VoidCallback onRemove;
 
   const _ExerciseCard({required this.exercise, required this.onUpdate, required this.onSetDone, required this.onRemove});
@@ -490,7 +518,7 @@ class _ExerciseCard extends StatelessWidget {
           set: e.value,
           isUnilateral: exercise.type == 'unilateral',
           onDone: () { e.value.done = !e.value.done; if (e.value.done) {
-            onSetDone();
+            onSetDone(e.value);
           } else {
             onUpdate();
           } },
@@ -544,7 +572,7 @@ class _SetRowState extends State<_SetRow> {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      color: done ? AppTheme.accent.withOpacity(0.08) : Colors.transparent,
+      color: done ? AppTheme.accent.withAlpha(20) : Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: Column(
         children: [
@@ -554,7 +582,7 @@ class _SetRowState extends State<_SetRow> {
             const SizedBox(width: 8),
             if (widget.isUnilateral)
               Container(width: 24, height: 22, margin: const EdgeInsets.only(right: 4),
-                decoration: BoxDecoration(color: sideColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: sideColor.withAlpha(38), borderRadius: BorderRadius.circular(4)),
                 child: Center(child: Text(widget.set.side ?? '', style: TextStyle(color: sideColor, fontWeight: FontWeight.w700, fontSize: 11)))),
             Expanded(
               child: Text(_prevLabel(), textAlign: TextAlign.center,

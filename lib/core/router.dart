@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/shell/app_shell.dart';
 import '../features/feed/feed_screen.dart';
+import '../features/feed/workout_detail_screen.dart';
 import '../features/analytics/analytics_screen.dart';
 import '../features/workout/workout_tab_screen.dart';
 import '../features/workout/active_workout_screen.dart';
@@ -9,12 +11,24 @@ import '../features/workout/finish_workout_screen.dart';
 import '../features/exercises/exercises_screen.dart';
 import '../features/exercises/exercise_detail_screen.dart';
 import '../features/more/more_screen.dart';
+import '../features/auth/login_screen.dart';
+import '../features/auth/register_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
-    redirect: (context, state) => null, // TODO: re-enable auth before iOS build
+    redirect: (context, state) {
+      final session = Supabase.instance.client.auth.currentSession;
+      final isAuth = state.matchedLocation.startsWith('/auth');
+      if (session == null && !isAuth) return '/auth';
+      if (session != null && isAuth) return '/';
+      return null;
+    },
     routes: [
+      GoRoute(path: '/auth', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/auth/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/auth/forgot', builder: (_, _) => const ForgotPasswordScreen()),
       GoRoute(
         path: '/workout/active',
         builder: (_, state) {
@@ -31,6 +45,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>;
           return FinishWorkoutScreen(workoutData: extra);
         },
+      ),
+      GoRoute(
+        path: '/workout/detail/:id',
+        builder: (_, state) => WorkoutDetailScreen(workoutId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/exercise/:id',
